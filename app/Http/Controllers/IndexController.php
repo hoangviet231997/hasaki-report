@@ -88,15 +88,15 @@ class IndexController extends Controller
             'total_product' => collect($data_tmp)->sum('quantity_product'),
         ];
 
-        foreach ($data_tmp as $key => $value) {
+        foreach ($data_tmp as $value) {
 
             $cate = DB::table('catalog_category_product')
-            ->where('catalog_category_product.product_id', $value->product_id)
-            ->join('catalog_category_entity_varchar','catalog_category_product.category_id','=','catalog_category_entity_varchar.entity_id')
-            ->join('eav_attribute','catalog_category_entity_varchar.attribute_id','=','eav_attribute.attribute_id')
-            ->where('eav_attribute.attribute_id', 42)
-            ->select('catalog_category_entity_varchar.value')
-            ->first();
+                ->where('catalog_category_product.product_id', $value->product_id)
+                ->join('catalog_category_entity_varchar', 'catalog_category_product.category_id', '=', 'catalog_category_entity_varchar.entity_id')
+                ->join('eav_attribute', 'catalog_category_entity_varchar.attribute_id', '=', 'eav_attribute.attribute_id')
+                ->where('eav_attribute.attribute_id', 42)
+                ->select('catalog_category_entity_varchar.value')
+                ->first();
 
             $brand = DB::table('catalog_product_entity_int')
                 ->join('eav_attribute', 'catalog_product_entity_int.attribute_id', '=', 'eav_attribute.attribute_id')
