@@ -24,9 +24,8 @@ class IndexController extends Controller
 
     public function updateDataSheet()
     {
-
-        $yesterday = date('Y-m-d 00:00:00', strtotime('-1 day'));
-        $now = date('Y-m-d 00:00:00', strtotime('now'));
+        $start_day = date('Y-m-d 00:00:00', strtotime('-1 day'));
+        $end_day = date('Y-m-d 23:59:59', strtotime('-1 day'));
         $sheet_name = date('d-m-Y', strtotime('-1 day'));
 
         $client = $this->getClient();
@@ -48,18 +47,6 @@ class IndexController extends Controller
         }
 
         $range = "$sheet_name!A2";
-
-        $data = [
-            [
-                'SKU',
-                'Tên sản phẩm',
-                'Danh mục',
-                'Giá Sản Phẩm',
-                'Số lượng sản phẩm',
-                'Tổng tiền',
-                'Thời gian bán',
-            ],
-        ];
 
         $data_tmp = DB::table('sales_order')
             ->join('sales_order_item', 'sales_order_item.order_id', '=', 'sales_order.entity_id')
@@ -85,27 +72,67 @@ class IndexController extends Controller
             ->groupBy('sales_order_item.product_id')
             ->get();
 
+        $data = [
+            [
+                'SKU',
+                'Tên sản phẩm',
+                'Thương hiệu',
+                'Danh mục',
+                'Giá Sản Phẩm',
+                'Số lượng sản phẩm',
+                'Tổng tiền',
+                'Thời gian bán',
+                '',
+                '',
+                'Tổng doanh thu',
+                'Tổng số lượng sản phẩm'
+            ],
+            [
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                collect($data_tmp)->sum('total_base_price'),
+                collect($data_tmp)->sum('quantity_product')
+            ]
+        ];
+
         foreach ($data_tmp as $key => $value) {
 
-            $cate_name = DB::table('catalog_category_entity_varchar')
+            $cate = DB::table('catalog_category_entity_varchar')
                 ->join('eav_attribute', 'catalog_category_entity_varchar.attribute_id', '=', 'eav_attribute.attribute_id')
                 ->where('eav_attribute.attribute_code', 'name')
                 ->where('catalog_category_entity_varchar.entity_id', $value->category_id)
                 ->select('catalog_category_entity_varchar.value')
                 ->first();
 
+            $brand = DB::table('catalog_product_entity_int')
+                ->join('eav_attribute', 'catalog_product_entity_int.attribute_id', '=', 'eav_attribute.attribute_id')
+                ->join('hasaki_brand', 'catalog_product_entity_int.value', '=', 'hasaki_brand.id')
+                ->where('eav_attribute.attribute_code', 'brand')
+                ->where('catalog_product_entity_int.entity_id', $value->product_id)
+                ->select('hasaki_brand.name')
+                ->first();
+
+            $brand_name = $brand->name ?? '';
 
             $data[] = [
                 $value->sku,
                 $value->name,
-                $cate_name->value,
+                $brand_name,
+                $cate->value,
                 $value->base_price,
                 $value->quantity_product,
                 $value->total_base_price,
                 $value->created_at,
             ];
         }
-
 
         $requestBody = new \Google_Service_Sheets_ValueRange([
             'values' => $data
