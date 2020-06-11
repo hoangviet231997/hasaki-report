@@ -48,9 +48,21 @@ class IndexController extends Controller
 
         $range = "$sheet_name!A2";
 
+        $data = [
+            [
+                'SKU',
+                'Tên sản phẩm',
+                'Thương hiệu',
+                'Danh mục',
+                'Giá Sản Phẩm',
+                'Số lượng sản phẩm',
+                'Tổng tiền',
+                'Thời gian bán',
+            ]
+        ];
+
         $data_tmp = DB::table('sales_order')
             ->join('sales_order_item', 'sales_order_item.order_id', '=', 'sales_order.entity_id')
-            ->join('catalog_category_product', 'catalog_category_product.product_id', '=', 'sales_order_item.product_id')
             ->where('sales_order.state', '=', 'complete')
             ->where([
                 ['sales_order.created_at', '>', '2020-05-25 00:00:00'],
@@ -59,7 +71,6 @@ class IndexController extends Controller
             ->select(
                 'sales_order_item.store_id',
                 'sales_order_item.product_id',
-                'catalog_category_product.category_id',
                 'sales_order_item.base_price',
                 'sales_order.created_at',
                 'sales_order_item.order_id',
@@ -72,45 +83,20 @@ class IndexController extends Controller
             ->groupBy('sales_order_item.product_id')
             ->get();
 
-        $data = [
-            [
-                'SKU',
-                'Tên sản phẩm',
-                'Thương hiệu',
-                'Danh mục',
-                'Giá Sản Phẩm',
-                'Số lượng sản phẩm',
-                'Tổng tiền',
-                'Thời gian bán',
-                '',
-                '',
-                'Tổng doanh thu',
-                'Tổng số lượng sản phẩm'
-            ],
-            [
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                collect($data_tmp)->sum('total_base_price'),
-                collect($data_tmp)->sum('quantity_product')
-            ]
+        $total = [
+            'total_price' => collect($data_tmp)->sum('total_base_price'),
+            'total_product' => collect($data_tmp)->sum('quantity_product'),
         ];
 
         foreach ($data_tmp as $key => $value) {
 
-            $cate = DB::table('catalog_category_entity_varchar')
-                ->join('eav_attribute', 'catalog_category_entity_varchar.attribute_id', '=', 'eav_attribute.attribute_id')
-                ->where('eav_attribute.attribute_code', 'name')
-                ->where('catalog_category_entity_varchar.entity_id', $value->category_id)
-                ->select('catalog_category_entity_varchar.value')
-                ->first();
+            $cate = DB::table('catalog_category_product')
+            ->where('catalog_category_product.product_id', $value->product_id)
+            ->join('catalog_category_entity_varchar','catalog_category_product.category_id','=','catalog_category_entity_varchar.entity_id')
+            ->join('eav_attribute','catalog_category_entity_varchar.attribute_id','=','eav_attribute.attribute_id')
+            ->where('eav_attribute.attribute_id', 42)
+            ->select('catalog_category_entity_varchar.value')
+            ->first();
 
             $brand = DB::table('catalog_product_entity_int')
                 ->join('eav_attribute', 'catalog_product_entity_int.attribute_id', '=', 'eav_attribute.attribute_id')
@@ -120,13 +106,11 @@ class IndexController extends Controller
                 ->select('hasaki_brand.name')
                 ->first();
 
-            $brand_name = $brand->name ?? '';
-
             $data[] = [
                 $value->sku,
                 $value->name,
-                $brand_name,
-                $cate->value,
+                $brand->name ?? '',
+                $cate->value ?? '',
                 $value->base_price,
                 $value->quantity_product,
                 $value->total_base_price,
@@ -143,6 +127,25 @@ class IndexController extends Controller
         ];
 
         $service->spreadsheets_values->update($spreadsheetId, $range, $requestBody, $params);
+
+        $range_total = "$sheet_name!J2";
+
+        $data_total = [
+            [
+                'Tổng doanh thu',
+                'Tổng sản phẩm'
+            ],
+            [
+                $total['total_price'],
+                $total['total_product']
+            ]
+        ];
+
+        $requestBodyTotal = new \Google_Service_Sheets_ValueRange([
+            'values' => $data_total
+        ]);
+
+        $service->spreadsheets_values->update($spreadsheetId, $range_total, $requestBodyTotal, $params);
         echo "SUCCESS \n";
         die;
     }
