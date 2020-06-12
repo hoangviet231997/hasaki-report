@@ -81,36 +81,54 @@ class IndexController extends Controller
                 DB::raw('count(sales_order_item.order_id) as quantity_order')
             )
             ->groupBy('sales_order_item.product_id')
-            ->get();
+            ->get()
+            ->toArray();
 
         $total = [
             'total_price' => collect($data_tmp)->sum('total_base_price'),
             'total_product' => collect($data_tmp)->sum('quantity_product'),
         ];
 
+        $categories = DB::table('catalog_category_product')
+            ->join('catalog_category_entity_varchar', 'catalog_category_product.category_id', '=', 'catalog_category_entity_varchar.entity_id')
+            ->whereIn('catalog_category_product.product_id', array_column($data_tmp, 'product_id'))
+            ->where('catalog_category_entity_varchar.attribute_id', 42)
+            ->select(
+                'catalog_category_product.product_id',
+                DB::raw('GROUP_CONCAT(catalog_category_entity_varchar.value) as cates')
+            )
+            ->groupBy('catalog_category_product.product_id')
+            ->get();
+
+        $brands = DB::table('catalog_product_entity_int')
+            ->whereIn('catalog_product_entity_int.entity_id', array_column($data_tmp, 'product_id'))
+            ->where('catalog_product_entity_int.attribute_id', 137)
+            ->join('hasaki_brand', 'catalog_product_entity_int.value', '=', 'hasaki_brand.id')
+            ->select('hasaki_brand.name', 'catalog_product_entity_int.entity_id as product_id')
+            ->get();
+
+        $list_cate = [];
+        foreach ($categories as $category) {
+            $list[$category->product_id] = $category->cates;
+        }
+
+        $list_brand = [];
+        foreach ($brands as $brand) {
+            $list_brand[$brand->product_id] = $brand->name;
+        }
+
+        foreach ($data_tmp as $index => $element) {
+            $element->category_name = isset($list_cate[$element->product_id]) ? $list_cate[$element->product_id] : '';
+            $element->brand_name = $list_brand[$element->product_id] ?? '';
+            $data_tmp[$index] = $element;
+        }
         foreach ($data_tmp as $value) {
-
-            $cate = DB::table('catalog_category_product')
-                ->where('catalog_category_product.product_id', $value->product_id)
-                ->join('catalog_category_entity_varchar', 'catalog_category_product.category_id', '=', 'catalog_category_entity_varchar.entity_id')
-                ->join('eav_attribute', 'catalog_category_entity_varchar.attribute_id', '=', 'eav_attribute.attribute_id')
-                ->where('eav_attribute.attribute_id', 42)
-                ->select('catalog_category_entity_varchar.value')
-                ->first();
-
-            $brand = DB::table('catalog_product_entity_int')
-                ->join('eav_attribute', 'catalog_product_entity_int.attribute_id', '=', 'eav_attribute.attribute_id')
-                ->join('hasaki_brand', 'catalog_product_entity_int.value', '=', 'hasaki_brand.id')
-                ->where('eav_attribute.attribute_code', 'brand')
-                ->where('catalog_product_entity_int.entity_id', $value->product_id)
-                ->select('hasaki_brand.name')
-                ->first();
 
             $data[] = [
                 $value->sku,
                 $value->name,
-                $brand->name ?? '',
-                $cate->value ?? '',
+                $value->brand_name,
+                $value->category_name,
                 $value->base_price,
                 $value->quantity_product,
                 $value->total_base_price,
