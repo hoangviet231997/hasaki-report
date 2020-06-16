@@ -15,4 +15,6 @@
 //     return view('welcome');
 // });
 
-Route::get('/',"IndexController@updateDataSheet");
+Route::get('/',"ReportController@reportBydate");
+
+Route::get('/report-brand',"ReportController@reportByBrand");
