@@ -40,58 +40,47 @@ class ReportController extends Controller
         }
 
         $range = "$sheet_name!A2";
-
-        $data = [
-            [
-                'SKU',
-                'Mã đơn hàng',
-                'Tên sản phẩm',
-                'Thương hiệu',
-                'Danh mục',
-                'Giá Sản Phẩm',
-                'Số lượng sản phẩm',
-                'Tổng tiền',
-                'Thời gian tạo đơn hàng',
-                'Thời gian cập nhật đơn hàng',
-            ]
-        ];
+        $data = [];
 
         $data_tmp = DB::table('sales_order')
-            ->join('sales_order_item', 'sales_order_item.order_id', '=', 'sales_order.entity_id')
+            ->leftJoin('sales_order_item', 'sales_order_item.order_id', '=', 'sales_order.entity_id')
             ->where('sales_order.state', '=', 'complete')
             ->where('sales_order_item.product_type', '=', 'simple')
-            ->where([
-                ['sales_order.created_at', '>=', '2020-24-25 00:00:00'],
-                ['sales_order.created_at', '<=', '2020-05-25 23:59:59'],
-            ])
+            // ->where('sales_order.created_at', '>=', '2020-05-25 00:00:00')
+            // ->where('sales_order.created_at', '<=', '2020-05-25 23:59:59')
+            ->whereBetween('sales_order.created_at', ['2020-05-01 00:00:00', '2020-05-10 23:59:59'])
             ->select(
                 'sales_order_item.store_id',
                 'sales_order_item.product_id',
                 'sales_order_item.base_price',
+                'sales_order_item.price',
                 'sales_order_item.row_total',
                 'sales_order.created_at',
                 'sales_order.updated_at',
-                'sales_order_item.order_id',
+                'sales_order.entity_id as order_id',
                 'sales_order_item.name',
                 'sales_order_item.sku',
-                'sales_order.increment_id',
-                DB::raw('sum(sales_order_item.base_price) as total_base_price'),
-                DB::raw('count(sales_order_item.product_id) as quantity_product'),
-                DB::raw('count(sales_order_item.order_id) as quantity_order')
+                'sales_order_item.qty_ordered',
+                'sales_order.increment_id'
+                // DB::raw('sum(sales_order_item.base_price) as total_base_price'),
+                // DB::raw('count(sales_order_item.product_id) as quantity_product'),
+                // DB::raw('count(sales_order_item.order_id) as quantity_order')
             )
-            ->groupBy('sales_order_item.product_id')
+            // ->groupBy('sales_order_item.product_id')
+            ->orderBy('increment_id')
             ->get()
             ->toArray();
-            return $data_tmp;
+
         $total = [
-            'total_price' => collect($data_tmp)->sum('total_base_price'),
-            'total_product' => collect($data_tmp)->sum('quantity_product'),
+            'total_price' => collect($data_tmp)->sum('row_total'),
+            'total_product' => collect($data_tmp)->count('product_id'),
+            'total_order' => collect($data_tmp)->count('order_id'),
         ];
 
         $category_var =  DB::table('catalog_category_entity_varchar')->where('attribute_id',42)->select('value','entity_id as category_id')->get()->toArray();
         $category_var = array_column($category_var,'value','category_id');
         unset($category_var[1]);unset($category_var[2]);
-   
+
         $category_product = DB::table('catalog_category_product')
             ->join('catalog_category_entity', 'catalog_category_product.category_id', '=', 'catalog_category_entity.entity_id')
             ->whereIn('catalog_category_product.product_id', array_column($data_tmp, 'product_id'))
@@ -115,40 +104,66 @@ class ReportController extends Controller
         foreach($category_product as $category) {
             $list_product_cate[$category->product_id] = explode('/',substr($category->path,4));
         }
-  
+
         $list_brand = [];
         foreach ($brands as $brand) {
             $list_brand[$brand->product_id] = $brand->name;
         }
-
+  
         foreach ($data_tmp as $index => $element) {
             $element->category_id = $list_product_cate[$element->product_id] ?? '';
             $element->brand_name = $list_brand[$element->product_id] ?? '';
         }
   
         foreach($data_tmp as $k => $val) {
-            $val->category_name = [];
-            foreach ((array)$val->category_id as $v) {
+            foreach ((array)$val->category_id as $ke => $v) {
+                $cate = 'cate'.($ke+1);
                 $val->category_name[] = $category_var[$v] ?? '';
-            
+                $val->$cate = $category_var[$v] ?? '';
             }
             $val->category_name = str_replace(',','/',implode(',' , $val->category_name));
         }
-     
-        foreach ($data_tmp as $value) {
 
-            $data[] = [
+        $thead = [
+            'SKU',
+            'Mã đơn hàng',
+            'Tên sản phẩm',
+            'Thương hiệu',
+            'Giá Sản Phẩm',
+            'Số lượng sản phẩm',
+            'Tổng tiền',
+            'Thời gian tạo đơn hàng',
+            'Thời gian cập nhật đơn hàng',
+            'Danh mục',
+            'Danh mục 1',
+            'Danh mục 2',
+            'Danh mục 3',
+            'Danh mục 4',
+            'Danh mục 5',
+            'Danh mục 6',
+            'Danh mục 7',
+        ];
+        $data[] = $thead;
+        foreach ($data_tmp as $key => $value) {
+            $arr = [
                 $value->sku,
                 $value->increment_id,
                 $value->name,
                 $value->brand_name,
+                intval($value->price),
+                intval($value->qty_ordered),
+                intval($value->row_total),
+                date('Y-m-d', strtotime($value->created_at)),
+                date('Y-m-d', strtotime($value->updated_at)),
                 $value->category_name,
-                intval($value->base_price),
-                $value->quantity_product,
-                intval($value->total_base_price),
-                date('Y-m-d',strtotime($value->created_at)),
-                date('Y-m-d',strtotime($value->updated_at)),
             ];
+         
+            foreach ((array) $value->category_id as $k => $v) {
+                $k = $k + 1;
+                $ca =  'cate' . $k;
+                $arr[] = $value->$ca;
+            }
+            $data[] = $arr;
         }
 
         $requestBody = new \Google_Service_Sheets_ValueRange([
@@ -161,16 +176,18 @@ class ReportController extends Controller
 
         $service->spreadsheets_values->update($spreadsheetId, $range, $requestBody, $params);
 
-        $range_total = "$sheet_name!M2";
+        $range_total = "$sheet_name!T2";
 
         $data_total = [
             [
                 'Tổng doanh thu',
-                'Tổng sản phẩm'
+                'Tổng sản phẩm',
+                'Tổng order'
             ],
             [
                 $total['total_price'],
-                $total['total_product']
+                $total['total_product'],
+                $total['total_order']
             ]
         ];
 
