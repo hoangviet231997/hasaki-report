@@ -58,23 +58,23 @@ class ReportController extends Controller
 
         $data_tmp = DB::table('sales_order')
             ->join('sales_order_item', 'sales_order_item.order_id', '=', 'sales_order.entity_id')
-            ->join('sales_order_grid','sales_order.entity_id','=','sales_order_grid.entity_id')
             ->where('sales_order.state', '=', 'complete')
             ->where('sales_order_item.product_type', '=', 'simple')
             ->where([
-                ['sales_order.created_at', '>=', '2020-05-25 00:00:00'],
+                ['sales_order.created_at', '>=', '2020-24-25 00:00:00'],
                 ['sales_order.created_at', '<=', '2020-05-25 23:59:59'],
             ])
             ->select(
                 'sales_order_item.store_id',
                 'sales_order_item.product_id',
                 'sales_order_item.base_price',
+                'sales_order_item.row_total',
                 'sales_order.created_at',
                 'sales_order.updated_at',
                 'sales_order_item.order_id',
                 'sales_order_item.name',
                 'sales_order_item.sku',
-                'sales_order_grid.increment_id',
+                'sales_order.increment_id',
                 DB::raw('sum(sales_order_item.base_price) as total_base_price'),
                 DB::raw('count(sales_order_item.product_id) as quantity_product'),
                 DB::raw('count(sales_order_item.order_id) as quantity_order')
@@ -82,23 +82,28 @@ class ReportController extends Controller
             ->groupBy('sales_order_item.product_id')
             ->get()
             ->toArray();
-
+            return $data_tmp;
         $total = [
             'total_price' => collect($data_tmp)->sum('total_base_price'),
             'total_product' => collect($data_tmp)->sum('quantity_product'),
         ];
 
-        $categories = DB::table('catalog_category_product')
-            ->join('catalog_category_entity_varchar', 'catalog_category_product.category_id', '=', 'catalog_category_entity_varchar.entity_id')
+        $category_var =  DB::table('catalog_category_entity_varchar')->where('attribute_id',42)->select('value','entity_id as category_id')->get()->toArray();
+        $category_var = array_column($category_var,'value','category_id');
+        unset($category_var[1]);unset($category_var[2]);
+   
+        $category_product = DB::table('catalog_category_product')
+            ->join('catalog_category_entity', 'catalog_category_product.category_id', '=', 'catalog_category_entity.entity_id')
             ->whereIn('catalog_category_product.product_id', array_column($data_tmp, 'product_id'))
-            ->where('catalog_category_entity_varchar.attribute_id', 42)
             ->select(
                 'catalog_category_product.product_id',
-                DB::raw('GROUP_CONCAT(catalog_category_entity_varchar.value) as cates')
+                'catalog_category_product.category_id',
+                'catalog_category_entity.path'
             )
             ->groupBy('catalog_category_product.product_id')
-            ->get();
-
+            ->get()
+            ->toArray();
+ 
         $brands = DB::table('catalog_product_entity_int')
             ->whereIn('catalog_product_entity_int.entity_id', array_column($data_tmp, 'product_id'))
             ->where('catalog_product_entity_int.attribute_id', 137)
@@ -106,21 +111,30 @@ class ReportController extends Controller
             ->select('hasaki_brand.name', 'catalog_product_entity_int.entity_id as product_id')
             ->get();
 
-        $list_cate = [];
-        foreach ($categories as $category) {
-            $list_cate[$category->product_id] = $category->cates;
+        $list_product_cate = [];
+        foreach($category_product as $category) {
+            $list_product_cate[$category->product_id] = explode('/',substr($category->path,4));
         }
-
+  
         $list_brand = [];
         foreach ($brands as $brand) {
             $list_brand[$brand->product_id] = $brand->name;
         }
 
         foreach ($data_tmp as $index => $element) {
-            $element->category_name = isset($list_cate[$element->product_id]) ? $list_cate[$element->product_id] : '';
+            $element->category_id = $list_product_cate[$element->product_id] ?? '';
             $element->brand_name = $list_brand[$element->product_id] ?? '';
-            $data_tmp[$index] = $element;
         }
+  
+        foreach($data_tmp as $k => $val) {
+            $val->category_name = [];
+            foreach ((array)$val->category_id as $v) {
+                $val->category_name[] = $category_var[$v] ?? '';
+            
+            }
+            $val->category_name = str_replace(',','/',implode(',' , $val->category_name));
+        }
+     
         foreach ($data_tmp as $value) {
 
             $data[] = [
@@ -179,6 +193,7 @@ class ReportController extends Controller
         $data_tmp = DB::table('sales_order')
             ->join('sales_order_item', 'sales_order_item.order_id', '=', 'sales_order.entity_id')
             ->where('sales_order.state', '=', 'complete')
+            ->where('sales_order_item.product_type', '=', 'simple')
             ->where([
                 ['sales_order.created_at', '<=', $start_day],
                 ['sales_order.created_at', '>=', $end_day],
