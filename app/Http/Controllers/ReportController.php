@@ -70,16 +70,16 @@ class ReportController extends Controller
             ->orderBy('increment_id')
             ->get()
             ->toArray();
-
         $total = [
             'total_price' => collect($data_tmp)->sum('row_total'),
             'total_product' => collect($data_tmp)->count('product_id'),
             'total_order' => collect($data_tmp)->count('order_id'),
         ];
 
-        $category_var =  DB::table('catalog_category_entity_varchar')->where('attribute_id',42)->select('value','entity_id as category_id')->get()->toArray();
-        $category_var = array_column($category_var,'value','category_id');
-        unset($category_var[1]);unset($category_var[2]);
+        $category_var =  DB::table('catalog_category_entity_varchar')->where('attribute_id', 42)->select('value', 'entity_id as category_id')->get()->toArray();
+        $category_var = array_column($category_var, 'value', 'category_id');
+        unset($category_var[1]);
+        unset($category_var[2]);
 
         $category_product = DB::table('catalog_category_product')
             ->join('catalog_category_entity', 'catalog_category_product.category_id', '=', 'catalog_category_entity.entity_id')
@@ -92,7 +92,7 @@ class ReportController extends Controller
             ->groupBy('catalog_category_product.product_id')
             ->get()
             ->toArray();
- 
+
         $brands = DB::table('catalog_product_entity_int')
             ->join('eav_attribute_option_value', 'catalog_product_entity_int.value', '=', 'eav_attribute_option_value.option_id')
             ->join('hasaki_brand', 'eav_attribute_option_value.value', '=', 'hasaki_brand.id')
@@ -103,27 +103,27 @@ class ReportController extends Controller
             ->get();
 
         $list_product_cate = [];
-        foreach($category_product as $category) {
-            $list_product_cate[$category->product_id] = explode('/',substr($category->path,4));
+        foreach ($category_product as $category) {
+            $list_product_cate[$category->product_id] = explode('/', substr($category->path, 4));
         }
 
         $list_brand = [];
         foreach ($brands as $brand) {
             $list_brand[$brand->product_id] = $brand->name;
         }
-  
+
         foreach ($data_tmp as $index => $element) {
             $element->category_id = $list_product_cate[$element->product_id] ?? '';
             $element->brand_name = $list_brand[$element->product_id] ?? '';
         }
-  
-        foreach($data_tmp as $k => $val) {
-            foreach ((array)$val->category_id as $ke => $v) {
-                $cate = 'cate'.($ke+1);
+
+        foreach ($data_tmp as $k => $val) {
+            foreach ((array) $val->category_id as $ke => $v) {
+                $cate = 'cate' . ($ke + 1);
                 $val->category_name[] = $category_var[$v] ?? '';
                 $val->$cate = $category_var[$v] ?? '';
             }
-            $val->category_name = str_replace(',','/',implode(',' , $val->category_name));
+            $val->category_name = str_replace(',', '/', implode(',', $val->category_name));
         }
 
         $thead = [
@@ -159,7 +159,7 @@ class ReportController extends Controller
                 date('Y-m-d', strtotime($value->updated_at)),
                 $value->category_name,
             ];
-         
+
             foreach ((array) $value->category_id as $k => $v) {
                 $k = $k + 1;
                 $ca =  'cate' . $k;
@@ -206,8 +206,6 @@ class ReportController extends Controller
     {
         $start_day = date('Y-m-d 00:00:00', strtotime('now'));
         $end_day = date('Y-m-d 00:00:00', strtotime('-45 day'));
-
-
 
         $data_tmp = DB::table('sales_order')
             ->join('sales_order_item', 'sales_order_item.order_id', '=', 'sales_order.entity_id')
@@ -317,8 +315,8 @@ class ReportController extends Controller
                 }
 
                 $total = [
-                    'total_price' => (int)collect($value)->sum('total_base_price'),
-                    'total_product' => (int)collect($value)->sum('quantity_product'),
+                    'total_price' => (int) collect($value)->sum('total_base_price'),
+                    'total_product' => (int) collect($value)->sum('quantity_product'),
                 ];
 
                 $requestBody = new \Google_Service_Sheets_ValueRange([
