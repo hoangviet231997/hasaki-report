@@ -48,7 +48,7 @@ class ReportController extends Controller
             ->where('sales_order_item.product_type', '=', 'simple')
             // ->where('sales_order.created_at', '>=', '2020-05-25 00:00:00')
             // ->where('sales_order.created_at', '<=', '2020-05-25 23:59:59')
-            ->whereBetween('sales_order.created_at', ['2020-05-01 00:00:00', '2020-05-10 23:59:59'])
+            ->whereBetween('sales_order.created_at', ['2020-05-25 00:00:00', '2020-05-25 23:59:59'])
             ->select(
                 'sales_order_item.store_id',
                 'sales_order_item.product_id',
@@ -94,9 +94,11 @@ class ReportController extends Controller
             ->toArray();
  
         $brands = DB::table('catalog_product_entity_int')
+            ->join('eav_attribute_option_value', 'catalog_product_entity_int.value', '=', 'eav_attribute_option_value.option_id')
+            ->join('hasaki_brand', 'eav_attribute_option_value.value', '=', 'hasaki_brand.id')
             ->whereIn('catalog_product_entity_int.entity_id', array_column($data_tmp, 'product_id'))
             ->where('catalog_product_entity_int.attribute_id', 137)
-            ->join('hasaki_brand', 'catalog_product_entity_int.value', '=', 'hasaki_brand.id')
+            ->where('eav_attribute_option_value.store_id', 0)
             ->select('hasaki_brand.name', 'catalog_product_entity_int.entity_id as product_id')
             ->get();
 
