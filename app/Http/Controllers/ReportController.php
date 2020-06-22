@@ -71,11 +71,11 @@ class ReportController extends Controller
             ->get()
             ->toArray();
         $total = [
-            'total_price' => collect($data_tmp)->sum('row_total'),
+            'total_price' => collect($data_tmp)->sum('price'),
             'total_product' => collect($data_tmp)->count('product_id'),
-            'total_order' => collect($data_tmp)->count('order_id'),
+            'total_order' => collect($data_tmp)->count('increment_id'),
         ];
-
+        return $total;
         $category_var =  DB::table('catalog_category_entity_varchar')->where('attribute_id', 42)->select('value', 'entity_id as category_id')->get()->toArray();
         $category_var = array_column($category_var, 'value', 'category_id');
         unset($category_var[1]);
