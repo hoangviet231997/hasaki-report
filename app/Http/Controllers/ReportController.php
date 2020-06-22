@@ -17,13 +17,30 @@ class ReportController extends Controller
 
     public function reportBydate()
     {
-        $start_day = date('Y-m-d 00:00:00', strtotime('-1 day'));
-        $end_day = date('Y-m-d 23:59:59', strtotime('-1 day'));
-        $sheet_name = date('d-m-Y', strtotime('-1 day'));
+        $start_day = date('Y-m-d 00:00:00', strtotime('2020-05-25 00:00:00'));
+        $end_day = date('Y-m-d 23:59:59', strtotime('2020-05-25 23:59:59'));
+        $sheet_name = 'DATA';
 
         $client = $this->index->getClient();
         $service = new \Google_Service_Sheets($client);
         $spreadsheetId = env('GOOGLE_SHEET_ID');
+
+        $set_title = [
+            new \Google_Service_Sheets_Request([
+                'updateSpreadsheetProperties' => [
+                    'properties' => [
+                        'title' => 'HASAKI-ONLINE-REPORT'
+                    ],
+                    'fields' => 'title'
+                ]
+            ]),
+        ];
+
+        $batchUpdateRequest = new \Google_Service_Sheets_BatchUpdateSpreadsheetRequest([
+            'requests' => $set_title
+        ]);
+
+        $title = $service->spreadsheets->batchUpdate($spreadsheetId, $batchUpdateRequest);
 
         try {
             $body = new \Google_Service_Sheets_BatchUpdateSpreadsheetRequest(array(
@@ -31,7 +48,7 @@ class ReportController extends Controller
                     'addSheet' => array(
                         'properties' => array(
                             'title' => "$sheet_name"
-                        ),
+                        )
                     )
                 )
             ));
@@ -48,16 +65,16 @@ class ReportController extends Controller
             ->where('sales_order_item.product_type', '=', 'simple')
             // ->where('sales_order.created_at', '>=', '2020-05-25 00:00:00')
             // ->where('sales_order.created_at', '<=', '2020-05-25 23:59:59')
-            ->whereBetween('sales_order.created_at', ['2020-05-25 00:00:00', '2020-05-25 23:59:59'])
+            ->whereBetween('sales_order.created_at', [$start_day, $end_day])
             ->select(
-                'sales_order_item.store_id',
+                // 'sales_order_item.store_id',
                 'sales_order_item.product_id',
-                'sales_order_item.base_price',
+                // 'sales_order_item.base_price',
                 'sales_order_item.price',
                 'sales_order_item.row_total',
                 'sales_order.created_at',
                 'sales_order.updated_at',
-                'sales_order.entity_id as order_id',
+                // 'sales_order.entity_id as order_id',
                 'sales_order_item.name',
                 'sales_order_item.sku',
                 'sales_order_item.qty_ordered',
@@ -70,12 +87,13 @@ class ReportController extends Controller
             ->orderBy('increment_id')
             ->get()
             ->toArray();
+
         $total = [
             'total_price' => collect($data_tmp)->sum('price'),
             'total_product' => collect($data_tmp)->count('product_id'),
             'total_order' => collect($data_tmp)->count('increment_id'),
         ];
-        return $total;
+
         $category_var =  DB::table('catalog_category_entity_varchar')->where('attribute_id', 42)->select('value', 'entity_id as category_id')->get()->toArray();
         $category_var = array_column($category_var, 'value', 'category_id');
         unset($category_var[1]);
@@ -83,7 +101,10 @@ class ReportController extends Controller
 
         $category_product = DB::table('catalog_category_product')
             ->join('catalog_category_entity', 'catalog_category_product.category_id', '=', 'catalog_category_entity.entity_id')
-            ->whereIn('catalog_category_product.product_id', array_column($data_tmp, 'product_id'))
+            ->whereIn('catalog_category_product.product_id', function ($subQuery) use ($start_day, $end_day) {
+                $subQuery->select('product_id')->from('sales_order_item')
+                    ->whereBetween('created_at', [$start_day, $end_day]);
+            })
             ->select(
                 'catalog_category_product.product_id',
                 'catalog_category_product.category_id',
@@ -96,7 +117,10 @@ class ReportController extends Controller
         $brands = DB::table('catalog_product_entity_int')
             ->join('eav_attribute_option_value', 'catalog_product_entity_int.value', '=', 'eav_attribute_option_value.option_id')
             ->join('hasaki_brand', 'eav_attribute_option_value.value', '=', 'hasaki_brand.id')
-            ->whereIn('catalog_product_entity_int.entity_id', array_column($data_tmp, 'product_id'))
+            ->whereIn('catalog_product_entity_int.entity_id', function ($subQuery) use ($start_day, $end_day) {
+                $subQuery->select('product_id')->from('sales_order_item')
+                    ->whereBetween('created_at', [$start_day, $end_day]);
+            })
             ->where('catalog_product_entity_int.attribute_id', 137)
             ->where('eav_attribute_option_value.store_id', 0)
             ->select('hasaki_brand.name', 'catalog_product_entity_int.entity_id as product_id')
